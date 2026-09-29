@@ -50,7 +50,9 @@ int bitXor(int x, int y) {
  *   1 if x and y have the same sign , 0 otherwise.
  */
 int samesign(int x, int y) {
-    return 2;
+    if(!(x&&y))
+        return(!x&&!y);
+    else return !((x >> 31) ^ (y >> 31));
 }
 
 /*
@@ -63,7 +65,23 @@ int samesign(int x, int y) {
  *   Difficulty: 4
  */
 int logtwo(int v) {
-    return 2;
+    int result = 0;
+    int shift = ((v>>16)>0)<<4;
+    v = v >> shift;
+    result = result | shift;
+    shift = ((v>>8)>0)<<3;
+    v = v >> shift;
+    result = result | shift;
+    shift = ((v>>4)>0)<<2;
+    v = v >> shift;
+    result = result | shift;
+    shift = ((v>>2)>0)<<1;
+    v = v >> shift;
+    result = result | shift;
+    shift = ((v>>1)>0)<<0;
+    v = v >> shift;
+    result = result | shift;
+    return result;
 }
 
 /*
@@ -76,7 +94,19 @@ int logtwo(int v) {
  *    Difficulty: 2
  */
 int byteSwap(int x, int n, int m) {
-    return 2;
+    int zm = m << 3;
+    int zn = n << 3;
+    int bytem = x >> (zm);
+    int byten = x >> (zn);
+    byten = byten << (zm);
+    bytem = bytem << (zn);
+    int yn = 0xFF << (zm);
+    int ym = 0xFF << (zn);
+    byten = byten & yn;
+    bytem = bytem & ym;
+    x = x & ~(yn | ym);
+    x = x | byten | bytem;
+    return x;
 }
 
 /*
@@ -88,7 +118,16 @@ int byteSwap(int x, int n, int m) {
  *   Difficulty: 3
  */
 unsigned reverse(unsigned v) {
-    return 2;
+    int i = 31;
+    unsigned v4 = 0;
+    while(i+1){
+        unsigned v1 = v >> i;
+        unsigned v2 = v1 & 0x1;
+        unsigned v3 = v2 << (31 - i);
+        v4 = v4 | v3;
+        i--;
+    }
+    return v4;
 }
 
 /*
@@ -100,7 +139,11 @@ unsigned reverse(unsigned v) {
  *   Difficulty: 3
  */
 int logicalShift(int x, int n) {
-    return 2;
+    int y = n + (~0) + !n;
+    int z = (1 << 31)>>y;
+    int h = (~z)|(!n << 31);
+    int p = (x >> n) & h;
+    return p;
 }
 
 /*
@@ -112,7 +155,27 @@ int logicalShift(int x, int n) {
  *   Difficulty: 4
  */
 int leftBitCount(int x) {
-    return 2;
+    int a;
+    int count = 0;
+    int all = !(~x);
+    a = !(~(x >> 16));
+    count = count + (a << 4);
+    x = x << (a << 4);
+
+    a = !(~(x >> 24));
+    count = count + (a << 3);
+    x = x << (a << 3);
+
+    a = !(~(x >> 28));
+    count = count + (a << 2);
+    x = x << (a << 2);
+
+    a = !(~(x >> 30));
+    count = count + (a << 1);
+    x = x << (a << 1);
+
+    count = count + !!(x >> 31);
+    return (count + all);
 }
 
 /*
@@ -124,9 +187,35 @@ int leftBitCount(int x) {
  *   Difficulty: 4
  */
 unsigned float_i2f(int x) {
-    return 2;
+    unsigned sign;
+    unsigned ux;
+    unsigned tmp;
+    unsigned frac;
+    unsigned rest;
+    unsigned result;
+    int E;
+    int shift;
+    if (!x)
+        return 0;
+    sign = x & 0x80000000;
+    ux = x;
+    if (x < 0)
+        ux = -ux;
+    E = 0;
+    tmp = ux;
+    while ((tmp = tmp >> 1))
+        E = E + 1;
+    if (E <= 23)
+        return sign | ((E + 127) << 23)
+                    | ((ux << (23 - E)) & 0x7FFFFF);
+    shift = E - 23;
+    frac = ux >> shift;
+    rest = ux & ((1 << shift) - 1);
+    result = sign | ((E + 127) << 23)
+                  | (frac & 0x7FFFFF);
+    return result +
+           ((rest + (frac & 1)) > (1 << (shift - 1)));
 }
-
 /*
  * floatScale2 - Return bit-level equivalent of expression 2*f for
  *   floating point argument f.
@@ -139,7 +228,22 @@ unsigned float_i2f(int x) {
  *   Difficulty: 4
  */
 unsigned floatScale2(unsigned uf) {
-    return 2;
+    unsigned sign = uf & 0x80000000;
+    unsigned exp = (uf >> 23) & 0xFF;
+    unsigned frac = uf & 0x7FFFFF;
+
+    if (exp == 0xFF)
+        return uf;
+
+    if (exp == 0)
+        return sign | (frac << 1);
+
+    exp = exp + 1;
+
+    if (exp == 0xFF)
+        frac = 0;
+
+    return sign | (exp << 23) | frac;
 }
 
 /*
@@ -156,7 +260,33 @@ unsigned floatScale2(unsigned uf) {
  *   Difficulty: 3
  */
 int float64_f2i(unsigned uf1, unsigned uf2) {
-    return 2;
+    unsigned sign;
+    unsigned exp;
+    unsigned frac_hi;
+    unsigned mant;
+    int E;
+    int result;
+    sign = uf2 >> 31;//取出符号位
+    exp = (uf2 >> 20) & 0x7FF;//取出11位阶码
+    E = exp - 1023;//得到真实指数E
+    if(E < 0)
+        return 0;//小于一的小数直接取0
+    if(E > 31)
+        return 0x80000000;//溢出
+    if((!sign)&(!(E-31)))//!sign表示正数，!(E - 31)表示31位,这里&与&&效果一致
+        return 0x80000000;//正数溢出
+    frac_hi = uf2 & 0xFFFFF;//取出uf2尾数的二十位
+    mant = frac_hi | 0x100000;//恢复隐藏的1
+    if (E <= 20){
+        result = mant >> (20 - E);//将第二十位移到第E位
+    }else{//位数不够，uf1的高位取
+        result = mant << (E - 20);//提前扩充需要的位数
+        result = result | (uf1 >> (32 - (E - 20)));//不上不足的尾数
+    }
+    if(sign){
+        return (-result);
+    }else return result;
+
 }
 
 /*
@@ -173,5 +303,20 @@ int float64_f2i(unsigned uf1, unsigned uf2) {
  *   Difficulty: 4
  */
 unsigned floatPower2(int x) {
-    return 2;
+    if (x < -149)
+        return 0;
+
+    if (x < -126)
+        return 1 << (x + 149);
+
+    if (x <= 127)
+        return (x + 127) << 23;
+
+    return 0xFF << 23;
 }
+
+
+
+
+
+
